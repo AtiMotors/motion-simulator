@@ -1,13 +1,16 @@
+KINEMATICS_MODEL = "bicycle"  # "unicycle" or "bicycle"
+WHEELBASE = 0.5
+
 ROBOT_WIDTH = 0.1
 ROBOT_LENGTH = 0.25
 
-alpha = 70 
-beta = 55 
+alpha = 70
+beta = 55
 gamma = 50
 
-d1 = 0.75 
-d2 = 0.80 
-d3 = 0.75 
+d1 = 0.75
+d2 = 0.80
+d3 = 0.75
 
 v = 1.0
 dt = 0.02

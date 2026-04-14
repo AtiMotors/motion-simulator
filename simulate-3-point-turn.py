@@ -1,10 +1,9 @@
 """
-Unicycle 3-segment turn simulator
+3-segment turn simulator with switchable kinematics models
 
 Features
-- Unicycle kinematics
+- Unicycle or Bicycle kinematics (configurable)
 - Constant speed magnitude
-- No pure rotation
 - 3 parameterized segments:
     1) Forward + Left  by alpha degrees over distance d1
     2) Reverse + Right by beta  degrees over distance d2
@@ -15,6 +14,9 @@ Features
 
 config.toml example
 -------------------
+KINEMATICS_MODEL = "bicycle"  # "unicycle" or "bicycle" (default: "bicycle")
+WHEELBASE = 0.5               # For bicycle model (default: 0.5)
+
 ROBOT_WIDTH = 0.8
 ROBOT_LENGTH = 1.2
 
@@ -47,6 +49,8 @@ except ModuleNotFoundError:
 
 
 DEFAULT_CONFIG = {
+    "KINEMATICS_MODEL": "bicycle",
+    "WHEELBASE": 0.5,
     "ROBOT_WIDTH": 0.8,
     "ROBOT_LENGTH": 1.2,
     "alpha": 90.0,
@@ -87,6 +91,41 @@ class Unicycle:
         self.x += v * math.cos(self.theta) * dt
         self.y += v * math.sin(self.theta) * dt
         self.theta = wrap_angle(self.theta + omega * dt)
+
+
+class Bicycle:
+    def __init__(
+        self,
+        x: float = 0.0,
+        y: float = 0.0,
+        theta: float = 0.0,
+        wheelbase: float = 0.5,
+    ):
+        self.x = x
+        self.y = y
+        self.theta = theta
+        self.wheelbase = wheelbase
+
+    def state(self) -> np.ndarray:
+        return np.array([self.x, self.y, self.theta], dtype=float)
+
+    def step(self, v: float, omega: float, dt: float) -> None:
+        """
+        Bicycle kinematic model.
+        omega is interpreted as steering angle rate (rad/s).
+        Converts to steering angle delta and applies bicycle kinematics.
+        """
+        # Approximate steering angle from angular velocity
+        # For bicycle: theta_dot = v * tan(delta) / L
+        # Solve for delta: delta = atan(theta_dot * L / v)
+        if abs(v) > 1e-6:
+            delta = math.atan(omega * self.wheelbase / v)
+        else:
+            delta = 0.0
+
+        self.x += v * math.cos(self.theta) * dt
+        self.y += v * math.sin(self.theta) * dt
+        self.theta = wrap_angle(self.theta + (v * math.tan(delta) / self.wheelbase) * dt)
 
 
 def segment_controls(
@@ -187,6 +226,8 @@ def heading_marker(
 def main() -> None:
     cfg = load_config("config.toml")
 
+    kinematics_model = str(cfg["KINEMATICS_MODEL"]).lower()
+    wheelbase = float(cfg["WHEELBASE"])
     robot_width = float(cfg["ROBOT_WIDTH"])
     robot_length = float(cfg["ROBOT_LENGTH"])
 
@@ -201,7 +242,15 @@ def main() -> None:
     v_mag = float(cfg["v"])
     dt = float(cfg["dt"])
 
-    robot = Unicycle(0.0, 0.0, 0.0)
+    if kinematics_model == "bicycle":
+        robot = Bicycle(0.0, 0.0, 0.0, wheelbase=wheelbase)
+    elif kinematics_model == "unicycle":
+        robot = Unicycle(0.0, 0.0, 0.0)
+    else:
+        raise ValueError(
+            f"Unknown kinematics model: {kinematics_model}. "
+            f"Must be 'unicycle' or 'bicycle'."
+        )
 
     specs = [
         ("forward", "left",  d1, alpha, "Segment 1: Forward + Left"),
@@ -245,6 +294,9 @@ def main() -> None:
 
     print("Loaded configuration")
     print("--------------------")
+    print(f"KINEMATICS_MODEL = {kinematics_model}")
+    if kinematics_model == "bicycle":
+        print(f"WHEELBASE = {wheelbase}")
     print(f"ROBOT_WIDTH  = {robot_width}")
     print(f"ROBOT_LENGTH = {robot_length}")
     print(f"alpha = {alpha} deg, beta = {beta} deg, gamma = {gamma} deg")
@@ -327,7 +379,8 @@ def main() -> None:
 
     # Animated plot
     fig2, ax2 = plt.subplots(figsize=(8, 8))
-    ax2.set_title("Animated Unicycle 3-Segment Turn")
+    model_name = "Bicycle" if kinematics_model == "bicycle" else "Unicycle"
+    ax2.set_title(f"Animated {model_name} 3-Segment Turn")
     ax2.set_xlabel("x")
     ax2.set_ylabel("y")
     ax2.axis("equal")
